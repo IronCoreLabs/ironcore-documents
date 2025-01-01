@@ -15,7 +15,7 @@ rust-version = "1.70.0"
 aes-gcm = "0.10.3"
 bytes = "1"
 hmac = { version = "0.12", features = ["std"] }
-itertools = "0.13.0"
+itertools = "0.14.0"
 protobuf = { version = "3.3", features = ["with-bytes"] }
 rand = "0.8.5"
 sha2 = "0.10"
