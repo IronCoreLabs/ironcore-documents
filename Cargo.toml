@@ -25,5 +25,5 @@ thiserror = "2"
 protobuf-codegen = "3.3"
 
 [dev-dependencies]
-hex-literal = "0.4.1"
+hex-literal = "1.0.0"
 rand_chacha = "0.3.1"
