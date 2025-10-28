@@ -115,6 +115,11 @@ pub fn take_lock<T>(m: &Mutex<T>) -> MutexGuard<T> {
     })
 }
 
+/// This macro will allow a newtype that has a single tuple field to use a fingerprint instead of
+/// printing the secret value.
+/// struct Foo([u8;32])
+/// impl_secret_debug!(Foo);
+/// Then the debug will print something like Foo(<redacted:bda33dd3...>).
 #[macro_export]
 macro_rules! impl_secret_debug {
     ($t:ty) => {
@@ -131,6 +136,11 @@ macro_rules! impl_secret_debug {
     };
 }
 
+/// This macro will allow a newtype that has a single named field to use a fingerprint instead of
+/// printing the secret value.
+/// struct Foo {secret:[u8;32]}
+/// impl_secret_debug_named!(Foo, secret);
+/// Then the debug will print something like Foo{<redacted:bda33dd3...>}.
 #[macro_export]
 macro_rules! impl_secret_debug_named {
     ($t:ty, $field:ident) => {
