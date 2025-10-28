@@ -4,12 +4,33 @@ pub mod v3;
 pub mod v4;
 pub mod v5;
 
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use std::{
     fmt::{Display, Formatter, Result as DisplayResult},
     sync::{Mutex, MutexGuard},
 };
 use thiserror::Error;
 use v5::key_id_header::KEY_ID_HEADER_LEN;
+
+// Create alias for HMAC-SHA256
+type HmacSha256 = Hmac<Sha256>;
+
+// Compile-time key with override support
+const CRATE_DEBUG_KEY: &str = match option_env!("MY_CRATE_DEBUG_KEY") {
+    Some(val) => val,
+    // Default to a string that is unlikely to have a rainbow table or some prebuilt attack
+    None => "2025-10-28T17:23:36",
+};
+
+/// Produce a short keyed hash for display in Debug impls.
+pub(crate) fn redacted_hash(data: &[u8]) -> String {
+    let mut mac = HmacSha256::new_from_slice(CRATE_DEBUG_KEY.as_ref())
+        .expect("HMAC can take key of any size");
+    mac.update(data);
+    // slicing this way will always work because HmacSha256 will always be over 8 bytes
+    hex::encode(mac.finalize().into_bytes())[..8].to_string()
+}
 
 include!(concat!(env!("OUT_DIR"), "/mod.rs"));
 
@@ -92,4 +113,62 @@ pub fn take_lock<T>(m: &Mutex<T>) -> MutexGuard<T> {
         let error = format!("Error when acquiring lock: {e}");
         panic!("{error}");
     })
+}
+
+#[macro_export]
+macro_rules! impl_secret_debug {
+    ($t:ty) => {
+        impl std::fmt::Debug for $t {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}(<redacted:{}...>)",
+                    stringify!($t),
+                    crate::redacted_hash(self.0.as_ref())
+                )
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_secret_debug_named {
+    ($t:ty, $field:ident) => {
+        impl std::fmt::Debug for $t {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}{{<redacted:{}...>}}",
+                    stringify!($t),
+                    $crate::redacted_hash(self.$field.as_ref())
+                )
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn impl_secret_debug_works() {
+        struct FooSecret([u8; 32]);
+        impl_secret_debug!(FooSecret);
+        let debug_str = format!("{:?}", FooSecret([1; 32]));
+        assert_eq!(debug_str, "FooSecret(<redacted:633f9067...>)");
+    }
+
+    #[test]
+    fn impl_secret_debug_named_works() {
+        struct FooSecret {
+            secret: String,
+        }
+        impl_secret_debug_named!(FooSecret, secret);
+        let debug_str = format!(
+            "{:?}",
+            FooSecret {
+                secret: "yes".to_string()
+            }
+        );
+        assert_eq!(debug_str, "FooSecret{<redacted:bda33dd3...>}");
+    }
 }

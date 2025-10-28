@@ -14,6 +14,7 @@ rust-version = "1.85.0"
 [dependencies]
 aes-gcm = "0.10.3"
 bytes = "1"
+hex = "0.4"
 hmac = { version = "0.12", features = ["std"] }
 itertools = "0.14.0"
 protobuf = { version = "3.3", features = ["with-bytes"] }

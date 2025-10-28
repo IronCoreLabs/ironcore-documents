@@ -1,6 +1,6 @@
 // This module is dedicated with things to do with aes encryption/decryption.
 use super::Error;
-use crate::take_lock;
+use crate::{impl_secret_debug, take_lock};
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce, aead::Aead, aead::Payload};
 use bytes::Bytes;
 use rand::{CryptoRng, RngCore};
@@ -64,8 +64,9 @@ pub struct EncryptedDocument(pub Vec<u8>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaintextDocument(pub Vec<u8>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct EncryptionKey(pub [u8; 32]);
+impl_secret_debug!(EncryptionKey);
 
 /// Decrypt the AES encrypted payload using the key. Note that the IV is on the front of the payload.
 pub fn decrypt_document_with_attached_iv(
