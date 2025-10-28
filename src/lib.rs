@@ -24,7 +24,7 @@ const CRATE_DEBUG_KEY: &str = match option_env!("MY_CRATE_DEBUG_KEY") {
 };
 
 /// Produce a short keyed hash for display in Debug impls.
-pub(crate) fn redacted_hash(data: &[u8]) -> String {
+pub fn redacted_hash(data: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(CRATE_DEBUG_KEY.as_ref())
         .expect("HMAC can take key of any size");
     mac.update(data);
@@ -124,7 +124,7 @@ macro_rules! impl_secret_debug {
                     f,
                     "{}(<redacted:{}...>)",
                     stringify!($t),
-                    crate::redacted_hash(self.0.as_ref())
+                    $crate::redacted_hash(self.0.as_ref())
                 )
             }
         }
