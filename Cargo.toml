@@ -18,7 +18,7 @@ hex = "0.4"
 hmac = { version = "0.12", features = ["std"] }
 itertools = "0.14.0"
 protobuf = { version = "3.3", features = ["with-bytes"] }
-rand = "0.8.5"
+rand = "0.9.2"
 sha2 = "0.10"
 thiserror = "2"
 
@@ -27,4 +27,4 @@ protobuf-codegen = "3.3"
 
 [dev-dependencies]
 hex-literal = "1.0.0"
-rand_chacha = "0.3.1"
+rand_chacha = "0.9.0"
