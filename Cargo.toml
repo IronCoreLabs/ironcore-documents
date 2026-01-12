@@ -1,7 +1,7 @@
 [package]
 name = "ironcore-documents"
 description = "A library for working with IronCore Labs documents and header formats."
-version = "0.2.3-rc.0"
+version = "0.2.3-pre.1"
 edition = "2024"
 license = "AGPL-3.0-only"
 documentation = "https://docs.rs/ironcore-documents"
