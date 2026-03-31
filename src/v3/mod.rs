@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn verify_known_good_sig_in_v3_header() {
         // dek and proto_bytes copied from TSC-java test
-        let dek: [u8; 32] = (0..32).into_iter().collect_vec().try_into().unwrap();
+        let dek: [u8; 32] = (0..32).collect_vec().try_into().unwrap();
         let proto_bytes = vec![
             10, 28, 49, 113, -17, 60, -119, -97, -121, 94, 89, 92, 34, 19, -54, -49, -110, -121,
             -57, -116, -15, -106, 69, -116, -42, -112, 84, 73, -128, -57, 26, 10, 10, 8, 116, 101,
@@ -160,14 +160,14 @@ mod tests {
         //   }
         // }
         let proto_bytes = hex!("0a030102031a0a0a0874656e616e744964");
-        let dek: [u8; 32] = (0..32).into_iter().collect_vec().try_into().unwrap();
+        let dek: [u8; 32] = (0..32).collect_vec().try_into().unwrap();
         let header = Message::parse_from_bytes(&proto_bytes).unwrap();
         assert!(!verify_signature(dek, &header));
     }
 
     #[test]
     fn verify_empty_v3_header() {
-        let dek: [u8; 32] = (0..32).into_iter().collect_vec().try_into().unwrap();
+        let dek: [u8; 32] = (0..32).collect_vec().try_into().unwrap();
         let empty_header = V3DocumentHeader::new();
         assert!(verify_signature(dek, &empty_header))
     }
@@ -181,7 +181,7 @@ mod tests {
         //   }
         // }
         let proto_bytes = hex!("0a001a0a0a0874656e616e744964");
-        let dek: [u8; 32] = (0..32).into_iter().collect_vec().try_into().unwrap();
+        let dek: [u8; 32] = (0..32).collect_vec().try_into().unwrap();
         let header = Message::parse_from_bytes(&proto_bytes).unwrap();
         assert!(verify_signature(dek, &header));
     }

@@ -9,8 +9,7 @@ use crate::{
 };
 use bytes::{Buf, Bytes};
 use key_id_header::KeyIdHeader;
-use rand::{CryptoRng, RngCore};
-use std::sync::{Arc, Mutex};
+use rand::CryptoRng;
 
 // The V5 data format is defined by 2 data formats. One for the edek and one for encrypted data encrypted with that edek.
 // The edek format is a 6 byte key id (see the key_id_header module) followed by a V4DocumentHeader proto.
@@ -92,8 +91,8 @@ impl EncryptedPayload {
 
 /// Encrypt a document to be used as a detached document. This means it will have a header of `0IRON` as the first
 /// 5 bytes.
-pub fn encrypt_detached_document<R: RngCore + CryptoRng>(
-    rng: Arc<Mutex<R>>,
+pub fn encrypt_detached_document<R: CryptoRng>(
+    rng: &mut R,
     key: EncryptionKey,
     document: PlaintextDocument,
 ) -> Result<EncryptedPayload> {
@@ -123,13 +122,12 @@ mod test {
     use rand_chacha::ChaCha20Rng;
     #[test]
     fn encrypt_decrypt_detached_document_roundtrips() {
-        let rng = ChaCha20Rng::seed_from_u64(172u64);
+        let mut rng = ChaCha20Rng::seed_from_u64(172u64);
         let key = EncryptionKey(hex!(
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let plaintext = PlaintextDocument(vec![100u8, 200u8]);
-        let encrypted =
-            encrypt_detached_document(Arc::new(Mutex::new(rng)), key, plaintext.clone()).unwrap();
+        let encrypted = encrypt_detached_document(&mut rng, key, plaintext.clone()).unwrap();
         let result = encrypted.decrypt(&key).unwrap();
         assert_eq!(result, plaintext);
     }

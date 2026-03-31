@@ -9,23 +9,19 @@ use crate::{
             SignatureInformation, SignedPayload, signature_information::SignatureType,
         },
     },
-    signing, take_lock,
+    signing,
 };
 use bytes::Bytes;
 use protobuf::Message;
-use rand::{CryptoRng, RngCore};
-use std::{
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use rand::CryptoRng;
 
 type Result<T> = core::result::Result<T, crate::Error>;
 
 /// If `maybe_dek` is None, generate a dek, otherwise use the one provided.
 /// Encrypt the dek using the kek to make an aes edek. The provided id will be put into the Aes256GcmEncryptedDek.
 /// Returns the dek and Aes256GcmEncryptedDek.
-fn generate_aes_edek<R: CryptoRng + RngCore>(
-    rng: Arc<Mutex<R>>,
+fn generate_aes_edek<R: CryptoRng>(
+    rng: &mut R,
     kek: EncryptionKey,
     maybe_dek: Option<EncryptionKey>,
     id: &str,
@@ -35,7 +31,7 @@ fn generate_aes_edek<R: CryptoRng + RngCore>(
 )> {
     let dek = maybe_dek.unwrap_or_else(|| {
         let mut buffer = [0u8; 32];
-        take_lock(&rng).deref_mut().fill_bytes(&mut buffer);
+        rng.fill_bytes(&mut buffer);
         EncryptionKey(buffer)
     });
     let (iv, edek) = aes_encrypt(kek, &dek.0, &[], rng)?;
@@ -85,8 +81,8 @@ pub fn create_signed_proto(
 /// Encrypt the dek using the kek to make an aes edek. The provided id will be put into the Aes256GcmEdek.
 /// The edek will be placed into a V4DocumentHeader and the signature will be computed.
 /// The aes dek is the key used to compute the signature.
-pub fn generate_aes_edek_and_sign<R: CryptoRng + RngCore>(
-    rng: Arc<Mutex<R>>,
+pub fn generate_aes_edek_and_sign<R: CryptoRng>(
+    rng: &mut R,
     kek: EncryptionKey,
     maybe_dek: Option<EncryptionKey>,
     id: &str,
@@ -164,26 +160,24 @@ mod test {
     use rand_chacha::ChaCha20Rng;
     #[test]
     fn generate_aes_edek_decrypts() {
-        let rng = ChaCha20Rng::seed_from_u64(203u64);
+        let mut rng = ChaCha20Rng::seed_from_u64(203u64);
         let kek = EncryptionKey(hex!(
             "aabbccddeefaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, aes_edek) =
-            generate_aes_edek(Arc::new(Mutex::new(rng)), kek, None, id).unwrap();
+        let (aes_dek, aes_edek) = generate_aes_edek(&mut rng, kek, None, id).unwrap();
         let result = decrypt_aes_edek(&kek, &aes_edek).unwrap();
         assert_eq!(result, aes_dek);
     }
 
     #[test]
     fn signed_aes_edek_verifies_and_decrypts() {
-        let rng = ChaCha20Rng::seed_from_u64(203u64);
+        let mut rng = ChaCha20Rng::seed_from_u64(203u64);
         let kek = EncryptionKey(hex!(
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, v4_document) =
-            generate_aes_edek_and_sign(Arc::new(Mutex::new(rng)), kek, None, id).unwrap();
+        let (aes_dek, v4_document) = generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
         let aes_edek =
             v4_document.signed_payload.0.clone().unwrap().edeks[0].take_aes_256_gcm_edek();
         let decrypted_aes_dek = decrypt_aes_edek(&kek, &aes_edek).unwrap();
@@ -194,13 +188,12 @@ mod test {
 
     #[test]
     fn signed_aes_edek_decrypts() {
-        let rng = ChaCha20Rng::seed_from_u64(203u64);
+        let mut rng = ChaCha20Rng::seed_from_u64(203u64);
         let kek = EncryptionKey(hex!(
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, v4_document) =
-            generate_aes_edek_and_sign(Arc::new(Mutex::new(rng)), kek, None, id).unwrap();
+        let (aes_dek, v4_document) = generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
         let aes_edek = v4_document.signed_payload.0.unwrap().edeks[0].take_aes_256_gcm_edek();
         let result = decrypt_aes_edek(&kek, &aes_edek).unwrap();
         assert_eq!(result, aes_dek);
