@@ -127,8 +127,7 @@ mod test {
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let plaintext = PlaintextDocument(vec![100u8, 200u8]);
-        let encrypted =
-            encrypt_detached_document(&mut rng, key, plaintext.clone()).unwrap();
+        let encrypted = encrypt_detached_document(&mut rng, key, plaintext.clone()).unwrap();
         let result = encrypted.decrypt(&key).unwrap();
         assert_eq!(result, plaintext);
     }

@@ -154,8 +154,7 @@ mod test {
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let plaintext = hex!("112233445566778899aabbccddee");
-        let (iv, encrypt_result) =
-            aes_encrypt(key, &plaintext, &[], &mut rand::rng()).unwrap();
+        let (iv, encrypt_result) = aes_encrypt(key, &plaintext, &[], &mut rand::rng()).unwrap();
         let decrypt_result = aes_decrypt_core(&key, iv, &encrypt_result.0, &[]).unwrap();
         assert_eq!(decrypt_result, plaintext);
     }
@@ -167,12 +166,9 @@ mod test {
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let document = vec![1u8];
-        let encrypted = encrypt_document_and_attach_iv(
-            &mut rng,
-            key,
-            PlaintextDocument(document.clone()),
-        )
-        .unwrap();
+        let encrypted =
+            encrypt_document_and_attach_iv(&mut rng, key, PlaintextDocument(document.clone()))
+                .unwrap();
         let result = decrypt_document_with_attached_iv(&key, &encrypted).unwrap();
         assert_eq!(result.0, document);
     }

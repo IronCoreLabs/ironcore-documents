@@ -165,8 +165,7 @@ mod test {
             "aabbccddeefaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, aes_edek) =
-            generate_aes_edek(&mut rng, kek, None, id).unwrap();
+        let (aes_dek, aes_edek) = generate_aes_edek(&mut rng, kek, None, id).unwrap();
         let result = decrypt_aes_edek(&kek, &aes_edek).unwrap();
         assert_eq!(result, aes_dek);
     }
@@ -178,8 +177,7 @@ mod test {
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, v4_document) =
-            generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
+        let (aes_dek, v4_document) = generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
         let aes_edek =
             v4_document.signed_payload.0.clone().unwrap().edeks[0].take_aes_256_gcm_edek();
         let decrypted_aes_dek = decrypt_aes_edek(&kek, &aes_edek).unwrap();
@@ -195,8 +193,7 @@ mod test {
             "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
         ));
         let id = "hello";
-        let (aes_dek, v4_document) =
-            generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
+        let (aes_dek, v4_document) = generate_aes_edek_and_sign(&mut rng, kek, None, id).unwrap();
         let aes_edek = v4_document.signed_payload.0.unwrap().edeks[0].take_aes_256_gcm_edek();
         let result = decrypt_aes_edek(&kek, &aes_edek).unwrap();
         assert_eq!(result, aes_dek);
