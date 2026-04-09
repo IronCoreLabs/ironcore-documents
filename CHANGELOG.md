@@ -1,3 +1,7 @@
+## 0.3.1
+
+- Added `v3::encrypt_detached_document` for encrypting documents in the legacy TSC format.
+
 ## 0.3.0
 
 Breaking changes:
