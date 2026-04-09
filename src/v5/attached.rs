@@ -1,11 +1,9 @@
 use bytes::{Buf, Bytes};
 use protobuf::Message;
 
-use crate::{Error, aes::IvAndCiphertext, icl_header_v4::V4DocumentHeader};
+use crate::{Error, Result, aes::IvAndCiphertext, icl_header_v4::V4DocumentHeader};
 
 use super::key_id_header::{self, KeyIdHeader};
-
-type Result<A> = std::result::Result<A, Error>;
 
 #[derive(Debug, PartialEq)]
 pub struct AttachedDocument {

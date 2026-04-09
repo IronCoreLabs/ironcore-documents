@@ -1,11 +1,8 @@
 // This module is dedicated with things to do with aes encryption/decryption.
-use super::Error;
-use crate::impl_secret_debug;
+use crate::{Error, Result, impl_secret_debug};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead, aead::Payload};
 use bytes::Bytes;
 use rand::CryptoRng;
-
-type Result<T> = core::result::Result<T, super::Error>;
 pub(crate) const IV_LEN: usize = 12;
 
 /// These bytes are the IV + CIPHERTEXT.

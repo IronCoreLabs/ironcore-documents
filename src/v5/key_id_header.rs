@@ -2,7 +2,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use protobuf::Message;
 
-use crate::{Error, vector_encryption_metadata::VectorEncryptionMetadata};
+use crate::{Error, Result, vector_encryption_metadata::VectorEncryptionMetadata};
 use std::fmt::Display;
 
 // This file is for functions which are working with our key id header value.
@@ -26,7 +26,6 @@ const STANDARD_EDEK_PAYLOAD_TYPE_NUM: u8 = 2u8;
 
 pub(crate) const KEY_ID_HEADER_LEN: usize = 6;
 
-type Result<A> = std::result::Result<A, super::Error>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyId(pub u32);
 

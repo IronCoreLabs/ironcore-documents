@@ -3,7 +3,7 @@ pub use crate::v4::aes;
 pub mod attached;
 pub mod key_id_header;
 use crate::{
-    Error,
+    Error, Result,
     aes::{EncryptionKey, IvAndCiphertext, PlaintextDocument, aes_encrypt},
     icl_header_v4::V4DocumentHeader,
 };
@@ -14,8 +14,6 @@ use rand::CryptoRng;
 // The V5 data format is defined by 2 data formats. One for the edek and one for encrypted data encrypted with that edek.
 // The edek format is a 6 byte key id (see the key_id_header module) followed by a V4DocumentHeader proto.
 // The edoc format is the EncryptedPayload below, which is 0 + IRON folowed by the encrypted data (iv, aes encrypted data and tag).
-
-type Result<T> = core::result::Result<T, Error>;
 const MAGIC: &[u8; 4] = crate::v4::MAGIC;
 pub(crate) const V0: u8 = 0u8;
 /// For external users to check the first bytes of an edoc.
