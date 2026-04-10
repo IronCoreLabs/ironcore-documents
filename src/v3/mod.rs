@@ -95,7 +95,7 @@ pub fn encrypt_detached_document<R: CryptoRng>(
     plaintext: PlaintextDocument,
 ) -> Result<Vec<u8>> {
     let saas_header = SaaSShieldHeader {
-        tenant_id: tenant_id.to_string().into(),
+        tenant_id: tenant_id.into(),
         ..Default::default()
     };
     let saas_header_bytes = saas_header
@@ -339,5 +339,16 @@ mod tests {
         let payload = EncryptedPayload::try_from(encrypted).unwrap();
         let decrypted = payload.decrypt(&key).unwrap();
         assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn encrypt_rejects_oversized_header() {
+        let key = EncryptionKey((0..32).collect_vec().try_into().unwrap());
+        let plaintext = PlaintextDocument(vec![1, 2, 3]);
+        let mut rng = rand::rng();
+        // A tenant_id large enough to push the serialized V3DocumentHeader past u16::MAX bytes.
+        let huge_tenant_id = "a".repeat(u16::MAX as usize + 1);
+        let err = encrypt_detached_document(&mut rng, key, &huge_tenant_id, plaintext).unwrap_err();
+        assert!(matches!(err, Error::HeaderLengthOverflow(_)));
     }
 }
