@@ -15,11 +15,11 @@ rust-version = "1.85.0"
 aes-gcm = "0.10.3"
 bytes = "1"
 hex = "0.4"
-hmac = { version = "0.12", features = ["std"] }
+hmac = "0.13"
 itertools = "0.14.0"
 protobuf = { version = "3.3", features = ["with-bytes"] }
 rand = "0.10.0"
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror = "2"
 
 [build-dependencies]
