@@ -4,7 +4,7 @@ pub mod v3;
 pub mod v4;
 pub mod v5;
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::{
     fmt::{Display, Formatter, Result as DisplayResult},
