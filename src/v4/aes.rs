@@ -1,7 +1,7 @@
 // This file contains things related to the V4 AES edek, which is defined in the icl_v4_header.proto.
 
 use crate::{
-    Error,
+    Error, Result,
     aes::{self, EncryptionKey, aes_decrypt_core, aes_encrypt},
     icl_header_v4::{
         self, V4DocumentHeader,
@@ -14,8 +14,6 @@ use crate::{
 use bytes::Bytes;
 use protobuf::Message;
 use rand::CryptoRng;
-
-type Result<T> = core::result::Result<T, crate::Error>;
 
 /// If `maybe_dek` is None, generate a dek, otherwise use the one provided.
 /// Encrypt the dek using the kek to make an aes edek. The provided id will be put into the Aes256GcmEncryptedDek.

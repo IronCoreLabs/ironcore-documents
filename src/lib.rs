@@ -13,6 +13,8 @@ use std::{
 use thiserror::Error;
 use v5::key_id_header::KEY_ID_HEADER_LEN;
 
+pub(crate) type Result<T> = core::result::Result<T, Error>;
+
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 

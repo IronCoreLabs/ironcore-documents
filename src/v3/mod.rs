@@ -1,15 +1,18 @@
 use crate::aes::IvAndCiphertext;
+use crate::icl_header_v3::v3document_header::Header;
 use crate::v4::MAGIC;
 use crate::{
-    Error,
+    Error, Result,
     aes::{
-        EncryptionKey, PlaintextDocument, aes_encrypt_with_iv, decrypt_document_with_attached_iv,
+        EncryptionKey, PlaintextDocument, aes_encrypt, aes_encrypt_with_iv,
+        decrypt_document_with_attached_iv,
     },
-    icl_header_v3::V3DocumentHeader,
+    icl_header_v3::{SaaSShieldHeader, V3DocumentHeader},
     signing::AES_KEY_LEN,
 };
 use bytes::Bytes;
 use protobuf::Message;
+use rand::CryptoRng;
 
 const IV_LEN: usize = 12;
 const GCM_TAG_LEN: usize = 16;
@@ -36,7 +39,7 @@ pub struct EncryptedPayload {
 
 impl TryFrom<Vec<u8>> for EncryptedPayload {
     type Error = Error;
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(value: Vec<u8>) -> std::result::Result<Self, Self::Error> {
         let value_len = value.len();
         if value_len < DETACHED_HEADER_LEN {
             Err(Error::EdocTooShort(value_len))?
@@ -72,7 +75,7 @@ impl TryFrom<Vec<u8>> for EncryptedPayload {
 
 impl EncryptedPayload {
     /// Decrypt a V3 detached document and verify its signature.
-    pub fn decrypt(self, key: &EncryptionKey) -> Result<PlaintextDocument, Error> {
+    pub fn decrypt(self, key: &EncryptionKey) -> Result<PlaintextDocument> {
         if verify_signature(key.0, &self.v3_document_header) {
             decrypt_document_with_attached_iv(key, &self.iv_and_ciphertext)
         } else {
@@ -81,6 +84,55 @@ impl EncryptedPayload {
             ))
         }
     }
+}
+
+/// Encrypt a plaintext document into the V3 detached format:
+/// `[3][IRON][header_len_u16_BE][v3DocumentHeader proto][IV][AES-GCM ciphertext + tag]`
+pub fn encrypt_detached_document<R: CryptoRng>(
+    rng: &mut R,
+    key: EncryptionKey,
+    tenant_id: &str,
+    plaintext: PlaintextDocument,
+) -> Result<Vec<u8>> {
+    let saas_header = SaaSShieldHeader {
+        tenant_id: tenant_id.into(),
+        ..Default::default()
+    };
+    let saas_header_bytes = saas_header
+        .write_to_bytes()
+        .map_err(|e| Error::ProtoSerializationErr(e.to_string()))?;
+    // Signature = AES-GCM(DEK, serialized header) → store IV ++ GCM tag
+    let (signature_iv, key_ciphertext) = aes_encrypt(key, &saas_header_bytes, &[], rng)?;
+    let signature: Vec<u8> = signature_iv
+        .iter()
+        // Just the tag bytes off the back
+        .chain(&key_ciphertext.0[key_ciphertext.0.len() - GCM_TAG_LEN..])
+        .copied()
+        .collect();
+
+    let header_bytes = V3DocumentHeader {
+        sig: signature.into(),
+        header: Some(Header::SaasShield(saas_header)),
+        ..Default::default()
+    }
+    .write_to_bytes()
+    .map_err(|e| Error::ProtoSerializationErr(e.to_string()))?;
+    if header_bytes.len() > u16::MAX as usize {
+        return Err(Error::HeaderLengthOverflow(header_bytes.len() as u64));
+    }
+
+    let (document_iv, document_ciphertext) = aes_encrypt(key, &plaintext.0, &[], rng)?;
+
+    // Sequence all our document pieces, see the method comment to match the order
+    Ok([
+        [V3].as_slice(),
+        MAGIC.as_slice(),
+        &(header_bytes.len() as u16).to_be_bytes(),
+        &header_bytes,
+        &document_iv,
+        &document_ciphertext.0,
+    ]
+    .concat())
 }
 
 struct V3Signature {
@@ -274,5 +326,29 @@ mod tests {
         let payload = EncryptedPayload::try_from(document).unwrap();
         let err = payload.decrypt(&dek).unwrap_err();
         assert!(matches!(err, Error::DecryptError(_)));
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = EncryptionKey((0..32).collect_vec().try_into().unwrap());
+        let plaintext = PlaintextDocument(vec![1, 2, 3, 4, 5]);
+        let mut rng = rand::rng();
+        let encrypted =
+            encrypt_detached_document(&mut rng, key, "tenantId", plaintext.clone()).unwrap();
+        assert!(encrypted.starts_with(&VERSION_AND_MAGIC));
+        let payload = EncryptedPayload::try_from(encrypted).unwrap();
+        let decrypted = payload.decrypt(&key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn encrypt_rejects_oversized_header() {
+        let key = EncryptionKey((0..32).collect_vec().try_into().unwrap());
+        let plaintext = PlaintextDocument(vec![1, 2, 3]);
+        let mut rng = rand::rng();
+        // A tenant_id large enough to push the serialized V3DocumentHeader past u16::MAX bytes.
+        let huge_tenant_id = "a".repeat(u16::MAX as usize + 1);
+        let err = encrypt_detached_document(&mut rng, key, &huge_tenant_id, plaintext).unwrap_err();
+        assert!(matches!(err, Error::HeaderLengthOverflow(_)));
     }
 }

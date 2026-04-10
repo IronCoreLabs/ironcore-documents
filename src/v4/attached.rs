@@ -1,10 +1,8 @@
-use crate::{Error, aes::IvAndCiphertext, icl_header_v4::V4DocumentHeader};
+use crate::{Error, Result, aes::IvAndCiphertext, icl_header_v4::V4DocumentHeader};
 use bytes::{Buf, Bytes};
 use protobuf::Message;
 
 use super::{MAGIC, PRE_HEADER_LEN, V4};
-
-type Result<T> = core::result::Result<T, Error>;
 
 fn get_v4_header_and_payload(mut b: Bytes) -> Result<(Bytes, IvAndCiphertext)> {
     let initial_len = b.len();
