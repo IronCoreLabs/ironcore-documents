@@ -122,10 +122,9 @@ pub(crate) fn aes_decrypt_core(
     associated_data: &[u8],
 ) -> Result<Vec<u8>> {
     let cipher = Aes256Gcm::new(&key.0.into());
-
     cipher
         .decrypt(
-            Nonce::from_slice(&iv),
+            &Nonce::from(iv),
             Payload {
                 msg: ciphertext,
                 aad: associated_data,
