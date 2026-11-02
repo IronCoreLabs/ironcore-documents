@@ -186,6 +186,8 @@ mod tests {
     use super::*;
     use hex_literal::hex;
     use itertools::Itertools;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     #[test]
     fn verify_known_good_sig_in_v3_header() {
@@ -338,6 +340,28 @@ mod tests {
         assert!(encrypted.starts_with(&VERSION_AND_MAGIC));
         let payload = EncryptedPayload::try_from(encrypted).unwrap();
         let decrypted = payload.decrypt(&key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn encrypt_detached_document_matches_known_bytes() {
+        let key = EncryptionKey((0..32).collect_vec().try_into().unwrap());
+        let plaintext = PlaintextDocument((0u8..37).collect());
+        let expected = hex!(
+            "0349524f4e002a0a1cff333f9fda91d09ca6db37dacaf891ec236d3ae53ec5c68266d9581c1a0a0a0874656e616e74496420b7b707875d4c5da259340de184111ffc0698ec9ebbf0c22eab831d6e3b94cff3ed2b1c2accbfca3ffd6cc3960dc3fca923521133d7b5f24b25664f337ccca77c"
+        );
+        let encrypted = encrypt_detached_document(
+            &mut ChaCha20Rng::seed_from_u64(3u64),
+            key,
+            "tenantId",
+            plaintext.clone(),
+        )
+        .unwrap();
+        assert_eq!(encrypted, expected);
+        let decrypted = EncryptedPayload::try_from(expected.to_vec())
+            .unwrap()
+            .decrypt(&key)
+            .unwrap();
         assert_eq!(decrypted, plaintext);
     }
 

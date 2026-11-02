@@ -131,6 +131,44 @@ mod test {
     }
 
     #[test]
+    fn detached_document_matches_known_bytes() {
+        let key = EncryptionKey(hex!(
+            "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ));
+        let plaintext = PlaintextDocument((0u8..37).collect());
+        let expected = hex!(
+            "0049524f4efa51152873435062df7e6003f9bdae6a308e34ee00b9ad0c7ba23c5492184b8041a5b4aa18d4297e9685bb98a9b65c1d682ed9fad80231a99b2b6148643ed5493b"
+        );
+        let encrypted = encrypt_detached_document(
+            &mut ChaCha20Rng::seed_from_u64(172u64),
+            key,
+            plaintext.clone(),
+        )
+        .unwrap();
+        assert_eq!(encrypted.write_to_bytes(), expected);
+        assert_eq!(
+            encrypted.clone().to_aes_value_with_attached_iv().as_ref(),
+            &expected[DETACHED_HEADER_LEN..]
+        );
+        assert_eq!(encrypted.clone().decrypt(&key).unwrap(), plaintext);
+
+        let from_attached_iv = EncryptedPayload::from(
+            crate::aes::encrypt_document_and_attach_iv(
+                &mut ChaCha20Rng::seed_from_u64(172u64),
+                key,
+                plaintext.clone(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(from_attached_iv.write_to_bytes(), expected);
+
+        let parsed = EncryptedPayload::try_from(expected.to_vec()).unwrap();
+        assert_eq!(parsed, encrypted);
+        assert_eq!(parsed, from_attached_iv);
+        assert_eq!(parsed.decrypt(&key).unwrap(), plaintext);
+    }
+
+    #[test]
     fn creation_fails_too_short() {
         let encrypted_payload_or_error: Result<EncryptedPayload> =
             hex!("00495241").to_vec().try_into();

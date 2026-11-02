@@ -168,4 +168,55 @@ mod test {
         let result = decrypt_document_with_attached_iv(&key, &encrypted).unwrap();
         assert_eq!(result.0, document);
     }
+
+    #[test]
+    fn encrypt_document_and_attach_iv_matches_known_bytes() {
+        let key = EncryptionKey(hex!(
+            "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ));
+        let plaintext: Vec<u8> = (0u8..37).collect();
+        let expected = hex!(
+            "39ad0295c374c530fb0620834c59a0530e9799c3a40c2d9f2e3f5d6317126bf3b08adeaba05beed00916540ab9ce671a584a475ddbfdd986123b0c94c75e2faa4f"
+        );
+        let encrypted = encrypt_document_and_attach_iv(
+            &mut ChaCha20Rng::seed_from_u64(13u64),
+            key,
+            PlaintextDocument(plaintext.clone()),
+        )
+        .unwrap();
+        assert_eq!(encrypted.as_ref(), expected);
+        let decrypted =
+            decrypt_document_with_attached_iv(&key, &IvAndCiphertext::from(expected.to_vec()))
+                .unwrap();
+        assert_eq!(decrypted.0, plaintext);
+    }
+
+    #[test]
+    fn encrypt_empty_document_and_attach_iv_matches_known_bytes() {
+        let key = EncryptionKey(hex!(
+            "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ));
+        let expected = hex!("39ad0295c374c530fb0620831b93b4ec8c4cb0fd5c4d594b96a1d1a3");
+        let encrypted = encrypt_document_and_attach_iv(
+            &mut ChaCha20Rng::seed_from_u64(13u64),
+            key,
+            PlaintextDocument(vec![]),
+        )
+        .unwrap();
+        assert_eq!(encrypted.as_ref(), expected);
+        let decrypted =
+            decrypt_document_with_attached_iv(&key, &IvAndCiphertext::from(expected.to_vec()))
+                .unwrap();
+        assert!(decrypted.0.is_empty());
+    }
+
+    #[test]
+    fn decrypt_attached_iv_shorter_than_tag_fails() {
+        let key = EncryptionKey(hex!(
+            "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ));
+        let iv_and_short_tag = IvAndCiphertext::from(vec![0u8; IV_LEN + 15]);
+        let result = decrypt_document_with_attached_iv(&key, &iv_and_short_tag);
+        assert!(matches!(result, Err(Error::DecryptError(_))));
+    }
 }
