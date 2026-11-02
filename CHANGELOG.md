@@ -1,3 +1,8 @@
+## 0.3.3
+
+- Encrypting a document copies the payload fewer times. `aes::encrypt_document_and_attach_iv`, `v5::encrypt_detached_document` and `v3::encrypt_detached_document` encrypt the plaintext straight into the output buffer, and decrypting no longer copies the ciphertext before decrypting it.
+- Added `v5::EncryptedPayload::into_bytes`, which returns the same bytes as `write_to_bytes` and does not copy payloads produced by `v5::encrypt_detached_document`.
+
 ## 0.3.2
 
 - dependency updates

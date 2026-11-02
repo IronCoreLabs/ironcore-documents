@@ -5,7 +5,7 @@ use crate::{
     Error, Result,
     aes::{
         EncryptionKey, PlaintextDocument, aes_encrypt, aes_encrypt_with_iv,
-        decrypt_document_with_attached_iv,
+        decrypt_document_with_attached_iv, encrypt_and_attach_iv_with_prefix,
     },
     icl_header_v3::{SaaSShieldHeader, V3DocumentHeader},
     signing::AES_KEY_LEN,
@@ -121,18 +121,15 @@ pub fn encrypt_detached_document<R: CryptoRng>(
         return Err(Error::HeaderLengthOverflow(header_bytes.len() as u64));
     }
 
-    let (document_iv, document_ciphertext) = aes_encrypt(key, &plaintext.0, &[], rng)?;
-
     // Sequence all our document pieces, see the method comment to match the order
-    Ok([
+    let prefix = [
         [V3].as_slice(),
         MAGIC.as_slice(),
         &(header_bytes.len() as u16).to_be_bytes(),
         &header_bytes,
-        &document_iv,
-        &document_ciphertext.0,
     ]
-    .concat())
+    .concat();
+    encrypt_and_attach_iv_with_prefix(rng, key, &prefix, &plaintext.0)
 }
 
 struct V3Signature {
