@@ -4,7 +4,7 @@ pub mod attached;
 pub mod key_id_header;
 use crate::{
     Error, Result,
-    aes::{EncryptionKey, IvAndCiphertext, PlaintextDocument, aes_encrypt},
+    aes::{EncryptionKey, IvAndCiphertext, PlaintextDocument, encrypt_and_attach_iv_with_prefix},
     icl_header_v4::V4DocumentHeader,
 };
 use bytes::{Buf, Bytes};
@@ -24,12 +24,28 @@ pub(crate) const DETACHED_HEADER_LEN: usize = 5;
 /// These are detached encrypted bytes, which means they have a `0IRON` + IV + CIPHERTEXT.
 /// This value is correct by construction and will be validated when we create it.
 /// There is no public constructor, only the TryFrom implementations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EncryptedPayload(IvAndCiphertext);
+#[derive(Debug, Clone)]
+pub struct EncryptedPayload(PayloadBytes);
+
+#[derive(Debug, Clone)]
+enum PayloadBytes {
+    /// Without the `0IRON` header.
+    IvAndCiphertext(IvAndCiphertext),
+    /// `0IRON` + IV + CIPHERTEXT.
+    Encoded(Vec<u8>),
+}
+
+impl PartialEq for EncryptedPayload {
+    fn eq(&self, other: &Self) -> bool {
+        self.iv_and_ciphertext() == other.iv_and_ciphertext()
+    }
+}
+
+impl Eq for EncryptedPayload {}
 
 impl Default for EncryptedPayload {
     fn default() -> EncryptedPayload {
-        EncryptedPayload(Bytes::new().into())
+        IvAndCiphertext::default().into()
     }
 }
 
@@ -42,7 +58,7 @@ impl TryFrom<Bytes> for EncryptedPayload {
         } else if value.get_u8() == V0 {
             let maybe_magic = value.split_to(MAGIC.len());
             if maybe_magic.as_ref() == MAGIC {
-                Ok(EncryptedPayload(value.into()))
+                Ok(IvAndCiphertext(value).into())
             } else {
                 Err(Error::NoIronCoreMagic)
             }
@@ -63,14 +79,26 @@ impl TryFrom<Vec<u8>> for EncryptedPayload {
 
 impl From<IvAndCiphertext> for EncryptedPayload {
     fn from(value: IvAndCiphertext) -> Self {
-        EncryptedPayload(value)
+        EncryptedPayload(PayloadBytes::IvAndCiphertext(value))
     }
 }
 
 impl EncryptedPayload {
+    fn iv_and_ciphertext(&self) -> &[u8] {
+        match &self.0 {
+            PayloadBytes::IvAndCiphertext(iv_and_ciphertext) => iv_and_ciphertext.as_ref(),
+            PayloadBytes::Encoded(encoded) => &encoded[DETACHED_HEADER_LEN..],
+        }
+    }
+
     /// Convert the encrypted payload to t
     pub fn to_aes_value_with_attached_iv(self) -> IvAndCiphertext {
-        self.0
+        match self.0 {
+            PayloadBytes::IvAndCiphertext(iv_and_ciphertext) => iv_and_ciphertext,
+            PayloadBytes::Encoded(encoded) => {
+                IvAndCiphertext(Bytes::from(encoded).slice(DETACHED_HEADER_LEN..))
+            }
+        }
     }
 
     /// Decrypt a V5 detached document. The document should have the expected header
@@ -79,11 +107,25 @@ impl EncryptedPayload {
     }
 
     pub fn write_to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(self.0.len() + DETACHED_HEADER_LEN);
-        result.push(V0);
-        result.extend_from_slice(MAGIC);
-        result.extend_from_slice(self.0.as_ref());
-        result
+        match &self.0 {
+            PayloadBytes::IvAndCiphertext(iv_and_ciphertext) => {
+                let mut result = Vec::with_capacity(iv_and_ciphertext.len() + DETACHED_HEADER_LEN);
+                result.push(V0);
+                result.extend_from_slice(MAGIC);
+                result.extend_from_slice(iv_and_ciphertext.as_ref());
+                result
+            }
+            PayloadBytes::Encoded(encoded) => encoded.clone(),
+        }
+    }
+
+    /// The same bytes as [`EncryptedPayload::write_to_bytes`]. Payloads returned by [`encrypt_detached_document`]
+    /// are returned without copying.
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self.0 {
+            PayloadBytes::Encoded(encoded) => encoded,
+            PayloadBytes::IvAndCiphertext(_) => self.write_to_bytes(),
+        }
     }
 }
 
@@ -94,10 +136,8 @@ pub fn encrypt_detached_document<R: CryptoRng>(
     key: EncryptionKey,
     document: PlaintextDocument,
 ) -> Result<EncryptedPayload> {
-    let (iv, enc_data) = aes_encrypt(key, &document.0, &[], rng)?;
-    Ok(EncryptedPayload(IvAndCiphertext(
-        iv.into_iter().chain(enc_data.0).collect(),
-    )))
+    encrypt_and_attach_iv_with_prefix(rng, key, &VERSION_AND_MAGIC, &document.0)
+        .map(|encoded| EncryptedPayload(PayloadBytes::Encoded(encoded)))
 }
 
 pub fn parse_standard_edek(edek_bytes: Bytes) -> Result<(KeyIdHeader, V4DocumentHeader)> {
@@ -128,6 +168,46 @@ mod test {
         let encrypted = encrypt_detached_document(&mut rng, key, plaintext.clone()).unwrap();
         let result = encrypted.decrypt(&key).unwrap();
         assert_eq!(result, plaintext);
+    }
+
+    #[test]
+    fn detached_document_matches_known_bytes() {
+        let key = EncryptionKey(hex!(
+            "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ));
+        let plaintext = PlaintextDocument((0u8..37).collect());
+        let expected = hex!(
+            "0049524f4efa51152873435062df7e6003f9bdae6a308e34ee00b9ad0c7ba23c5492184b8041a5b4aa18d4297e9685bb98a9b65c1d682ed9fad80231a99b2b6148643ed5493b"
+        );
+        let encrypted = encrypt_detached_document(
+            &mut ChaCha20Rng::seed_from_u64(172u64),
+            key,
+            plaintext.clone(),
+        )
+        .unwrap();
+        assert_eq!(encrypted.write_to_bytes(), expected);
+        assert_eq!(encrypted.clone().into_bytes(), expected);
+        assert_eq!(
+            encrypted.clone().to_aes_value_with_attached_iv().as_ref(),
+            &expected[DETACHED_HEADER_LEN..]
+        );
+        assert_eq!(encrypted.clone().decrypt(&key).unwrap(), plaintext);
+
+        let from_attached_iv = EncryptedPayload::from(
+            crate::aes::encrypt_document_and_attach_iv(
+                &mut ChaCha20Rng::seed_from_u64(172u64),
+                key,
+                plaintext.clone(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(from_attached_iv.write_to_bytes(), expected);
+        assert_eq!(from_attached_iv.clone().into_bytes(), expected);
+
+        let parsed = EncryptedPayload::try_from(expected.to_vec()).unwrap();
+        assert_eq!(parsed, encrypted);
+        assert_eq!(parsed, from_attached_iv);
+        assert_eq!(parsed.decrypt(&key).unwrap(), plaintext);
     }
 
     #[test]

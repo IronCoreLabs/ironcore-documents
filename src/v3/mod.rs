@@ -5,7 +5,7 @@ use crate::{
     Error, Result,
     aes::{
         EncryptionKey, PlaintextDocument, aes_encrypt, aes_encrypt_with_iv,
-        decrypt_document_with_attached_iv,
+        decrypt_document_with_attached_iv, encrypt_and_attach_iv_with_prefix,
     },
     icl_header_v3::{SaaSShieldHeader, V3DocumentHeader},
     signing::AES_KEY_LEN,
@@ -121,18 +121,15 @@ pub fn encrypt_detached_document<R: CryptoRng>(
         return Err(Error::HeaderLengthOverflow(header_bytes.len() as u64));
     }
 
-    let (document_iv, document_ciphertext) = aes_encrypt(key, &plaintext.0, &[], rng)?;
-
     // Sequence all our document pieces, see the method comment to match the order
-    Ok([
+    let prefix = [
         [V3].as_slice(),
         MAGIC.as_slice(),
         &(header_bytes.len() as u16).to_be_bytes(),
         &header_bytes,
-        &document_iv,
-        &document_ciphertext.0,
     ]
-    .concat())
+    .concat();
+    encrypt_and_attach_iv_with_prefix(rng, key, &prefix, &plaintext.0)
 }
 
 struct V3Signature {
@@ -186,6 +183,8 @@ mod tests {
     use super::*;
     use hex_literal::hex;
     use itertools::Itertools;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     #[test]
     fn verify_known_good_sig_in_v3_header() {
@@ -338,6 +337,28 @@ mod tests {
         assert!(encrypted.starts_with(&VERSION_AND_MAGIC));
         let payload = EncryptedPayload::try_from(encrypted).unwrap();
         let decrypted = payload.decrypt(&key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn encrypt_detached_document_matches_known_bytes() {
+        let key = EncryptionKey((0..32).collect_vec().try_into().unwrap());
+        let plaintext = PlaintextDocument((0u8..37).collect());
+        let expected = hex!(
+            "0349524f4e002a0a1cff333f9fda91d09ca6db37dacaf891ec236d3ae53ec5c68266d9581c1a0a0a0874656e616e74496420b7b707875d4c5da259340de184111ffc0698ec9ebbf0c22eab831d6e3b94cff3ed2b1c2accbfca3ffd6cc3960dc3fca923521133d7b5f24b25664f337ccca77c"
+        );
+        let encrypted = encrypt_detached_document(
+            &mut ChaCha20Rng::seed_from_u64(3u64),
+            key,
+            "tenantId",
+            plaintext.clone(),
+        )
+        .unwrap();
+        assert_eq!(encrypted, expected);
+        let decrypted = EncryptedPayload::try_from(expected.to_vec())
+            .unwrap()
+            .decrypt(&key)
+            .unwrap();
         assert_eq!(decrypted, plaintext);
     }
 
